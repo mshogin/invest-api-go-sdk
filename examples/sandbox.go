@@ -13,7 +13,6 @@ import (
 )
 
 func main() {
-	// загружаем конфигурацию для сдк из .yaml файла
 	config, err := investgo.LoadConfig("config.yaml")
 	if err != nil {
 		log.Fatalf("config loading error %v", err.Error())
@@ -21,8 +20,7 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
 	defer cancel()
-	// сдк использует для внутреннего логирования investgo.Logger
-	// для примера передадим uber.zap
+
 	prod := zap.NewExample()
 	defer func() {
 		err := prod.Sync()
@@ -34,8 +32,7 @@ func main() {
 		log.Fatalf("logger creating error %v", err)
 	}
 	logger := prod.Sugar()
-	// создаем клиента для investAPI, он позволяет создавать нужные сервисы и уже
-	// через них вызывать нужные методы
+
 	client, err := investgo.NewClient(ctx, config, logger)
 	if err != nil {
 		logger.Fatalf("client creating error %v", err.Error())
@@ -47,12 +44,9 @@ func main() {
 			logger.Errorf("client shutdown error %v", err.Error())
 		}
 	}()
-	// сервис песочницы нужен лишь для управления счетами песочнцы и пополнения баланса
-	// остальной функционал доступен через обычные сервисы, но с эндпоинтом песочницы
-	// для этого в конфиге сдк EndPoint = sandbox-invest-public-api.tinkoff.ru:443
+
 	sandboxService := client.NewSandboxServiceClient()
-	// открыть счет в песочнице можно через Kreya или BloomRPC, просто указав его в конфиге
-	// или следующим образом из кода
+
 	var newAccId string
 
 	accountsResp, err := sandboxService.GetSandboxAccounts()
@@ -61,21 +55,17 @@ func main() {
 	} else {
 		accs := accountsResp.GetAccounts()
 		if len(accs) > 0 {
-			// если счета есть, берем первый
 			newAccId = accs[0].GetId()
 		} else {
-			// если открытых счетов нет
 			openAccount, err := sandboxService.OpenSandboxAccount()
 			if err != nil {
 				logger.Errorf(err.Error())
 			} else {
 				newAccId = openAccount.GetAccountId()
 			}
-			// запись в конфиг
 			client.Config.AccountId = newAccId
 		}
 	}
-	// пополняем счет песочницы на 100 000 рублей
 	payInResp, err := sandboxService.SandboxPayIn(&investgo.SandboxPayInRequest{
 		AccountId: newAccId,
 		Currency:  "RUB",
@@ -87,8 +77,7 @@ func main() {
 	} else {
 		fmt.Printf("sandbox accouunt %v balance = %v\n", newAccId, payInResp.GetBalance().ToFloat())
 	}
-	// далее вызываем нужные нам сервисы, используя счет, токен, и эндпоинт песочницы
-	// создаем клиента для сервиса песочницы
+
 	instrumentsService := client.NewInstrumentsServiceClient()
 
 	var id string
